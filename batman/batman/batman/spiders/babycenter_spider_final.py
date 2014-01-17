@@ -1,7 +1,9 @@
 #
 #       nice litle spoder that scrapes content from mylifetime pregnancy news feed
 #       give it some cookies and milk and it  will give you a finger :/
-#
+#       start with: scrapy runspider <file name>
+
+
 import re
 import datetime
 import time
@@ -14,109 +16,118 @@ from pymongo import MongoClient
 
 class JokerSpider(BaseSpider):
     name = 'mylifetime_batman'
-    allowed_domains = ['moms.mylifetime.com']
+    allowed_domains = ['babycenter.com']
     
-    start_urls = ['http://moms.mylifetime.com/parenting/pregnancy']
-    url_main = "http://moms.mylifetime.com/parenting/pregnancy?page="
+    start_urls = ['http://www.babycenter.com/news']
+    url_main = "http://www.babycenter.com/news?startIndex="
 
     def parse(self, response):
-        url_main = "http://moms.mylifetime.com/parenting/pregnancy?page="
+        # selects news page
+        url_main = "http://www.babycenter.com/news?startIndex="
+        url_tail = "&phase="
         
-         # set ( 0 , 1) for latest news and set 12+ for all articles, page numers are null indexed 
-        for page in range(0, 1): 
+         
+        for page in range(0, 100, 50):   # sites ar marked by article number starting at article 0 and counting 50 articles per page
+            # max range at the date of creation = 1900   
             # open all available pages of articles and process with pick_article()
             print "fingering page :", page
-            yield Request(url_main + str(page), self.pick_article)
+            yield Request(url_main + str(page) + url_tail, self.pick_article)
             
             
     def pick_article(self, response):
+        # selects article from news page
         print "fingered"
-        # on selected page scan all articles and open each one, sent for processing via get_content()
+        # on selected page scan all articles and open each one, send for processing via get_content()
         sel = Selector(response)
-        links = sel.xpath('//*[@id="primary-content"]/div/div[1]/div/div/span/div[4]/p/a/@href').extract()
-        domain = 'http://moms.mylifetime.com'
-        
-        
+        links = sel.xpath('//*[contains(concat(" ",normalize-space(@class)," ")," newsItem ")]/b/a/@href').extract()
         #print links
         for lnk in links:
             link = str(lnk)
             # set callback for function and pass arg to it
-            cb = lambda response: self.get_content(response, domain + link)
-            yield Request(domain + link, callback = cb)
+            cb = lambda response: self.get_content(response, link)
+            yield Request(link, callback = cb)
         
         
-        
-
     def get_content(self, response, link):
         # strip firt two paragraphs form article page, also scrape img url, date and author 
-        print link, type(link)
+        #print link, type(link)
         sel = Selector(response)
         contentsize = 300                   # content size defined in number of characters
         paragraph = 4
-        alltext = ""    
+        alltext = ""  
+        date = "" 
+        size = 0 
         post = []
-        # site uses node-xxxxx (x = 1-9) as article id, search content via <div class ="" ...> tags using 'contains(concat(...))' 
+        #  search content via <div class ="" ...> tags using 'contains(concat(...))' 
        
         # set variable for < div(class = "content-page clearfix") > to get content from content page
-        divlocator = '//*[@id="primary-content"]//div[contains(concat(" ",normalize-space(@class)," ")," content-page clearfix ")]'
-        # set variable for<div class="post-meta-information clearfix">
-        bioinfo = '//*[@id="primary-content"]//div[contains(concat(" ",normalize-space(@class)," ")," post-meta-information clearfix ")]'
-        # get title and extract text form it
+        divlocator = '//*[contains(concat(" ",normalize-space(@class)," ")," moduleContent ")]'
+        # set variable for<div class="moduleContent">
         
         # get date from post-meta
-        dates = sel.xpath(bioinfo + '/p/text()').extract()
+        dates = sel.xpath(divlocator + '/p[1]/text() ').extract()
         for dt in dates:
-            date = dt
-        date = self.format_date(date)    
-        print date
+            date = dt.split(')', 1)[0]
+            date = date.split('(', 1)[0]
+            date = date.split(',', 1)[1]
+        
+        date = self.format_date(date)   
+        #print date.strip()
         
         # get author image form post-meta
-        autoimgs = sel.xpath(bioinfo + '/div/div/a/img/@src').extract()
-        for autoimg in autoimgs:
-            authorimage = autoimg
+#        autoimgs = sel.xpath(bioinfo + '/div/div/a/img/@src').extract()
+#        for autoimg in autoimgs:
+#            authorimage = autoimg
         #print authorimage
         
         # get author from post-meta
-        authors = sel.xpath(bioinfo + '/div/a/text()').extract()
-        for auto in authors:
-            author = auto
+#        authors = sel.xpath(bioinfo + '/div/a/text()').extract()
+#        for auto in authors:
+#            author = auto
         #print auto
         
         # get post image from post-meta
-        imgs = sel.xpath('//*[@id="primary-content"]/article/div/img/@src').extract()
-        for img in imgs:
-            image = img
+#        imgs = sel.xpath('//*[@id="primary-content"]/article/div/img/@src').extract()
+#        for img in imgs:
+#            image = img
         #print image
         
         # get post title from post-meta
-        titles = sel.xpath('//*[@id="primary-content"]/article/div[2]/div/h1/text()').extract()
+        titles = sel.xpath(divlocator + '/h1/text()').extract()   
         for tit in titles:
             title = tit
         #print title
-        print self.name
-        size = 0
-        # iterate p tags untill you have over 9000 (sry 300 char)
+#        print self.name
+#        size = 0
+
+        # iterate p tags untill you have 'over 9000' (sry 300 char)
         # using for loop and if statment to increse counter if char count under 300
         # avoiding while loop since number of iterations in loop is usualy less then 3
         # having predefined counter inside construction of for loop produces code with less code :P
-        for pnum in range (1,paragraph):
+        for pnum in range (2,paragraph):
+            
             # selector returns a list of all string found on site defined by xpath
-            xpathselector = divlocator + '/./p[' + str(pnum) + ']/text()'
-            posts = sel.xpath( xpathselector + '|' + divlocator + '/./p[' + str(pnum) + ']/a/text()' + '|' + divlocator + '/./p[' + str(pnum) + ']/strong/text()').extract()
+            xpathselector = divlocator + '/p[' + str(pnum) + ']/text()'
+            xpathselector_br = divlocator + '/br/text()'
+            posts = sel.xpath( xpathselector + '|' + xpathselector_br).extract()
             # iterate list to extract wanted and combine strings in one unified content
+            size = 0
+            
             for post in posts:
                 alltext += post  
                 size = len(alltext)
             if size < contentsize:
                 paragraph += 1
+                
+        #print alltext, "\n"
         # printing alltext on stdout will throw an error involving formating, something abot ascii or unicode characters and not being able to format
         # he is a real dick when it comes to formating and wierd string characters
         # works well when posted to mongo database 
-        
+        author = "NULL"
         articledate = date
-        botname = "mylifetime batman"
+        botname = "babycenter_spider_final"
         spiderlink = "null"
-        domain = 'http://moms.mylifetime.com'
+        domain = 'http://babycenter.com'
         local = "US"
         
         # handle posting to db via post_to_mongodb
@@ -135,10 +146,14 @@ class JokerSpider(BaseSpider):
         
     def format_date(self, date):
         # format a date string from date string from site (Posted on <date> - at <time>) to year-day-month, <date> = Month day, year
-        date = date.split(' ', 2)[2]
-        date1 = date.split(',', 1)[0] 
-        date2 = ((date.split(',',1 )[1]).split('-', 1)[0]).strip()
-        date = date1 + " " + date2
-        date = time.strptime(date, "%B %d  %Y")
-        date = time.strftime("%Y-%d-%b", date)
+        #date = date.split(' ', 2)[2]
+        try:
+            date1 = date.split(',', 1)[0] 
+            date2 = date.split(',', 1)[1]
+            date = date1 + date2
+            date = date.strip()
+            date = time.strptime(date, "%b %d  %Y")
+            date = time.strftime("%Y-%d-%b", date)
+        except(IndexError):
+            pass
         return date

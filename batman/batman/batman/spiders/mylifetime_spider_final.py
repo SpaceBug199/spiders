@@ -126,6 +126,7 @@ class JokerSpider(BaseSpider):
     def post_to_mongodb(self, size, author, title, post, domain, link, articledate, botname, spiderlink, local):
         # hadle mogo db posting 
         # posting content to mongodb database
+        # mongolab  login: buggy pass: h3x4p0d
         client = MongoClient ('mongodb://buggy_spider:spider@ds039507.mongolab.com:39507/buggy_test')
         db = client.buggy_test
         # format author, titile, post, from, link to source, original date of article, name of active bot, link to bot in database
